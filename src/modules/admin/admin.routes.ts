@@ -135,6 +135,85 @@ r.post('/students', async (req, res, next) => {
   } catch (e) { next(e); }
 });
 
+// Set monthly fee for a student
+r.patch('/students/:userId/fee', async (req, res, next) => {
+  try {
+    const { monthlyFee } = z.object({ monthlyFee: z.number().min(0) }).parse(req.body);
+    const profile = await prisma.studentProfile.update({
+      where: { userId: req.params.userId },
+      data: { monthlyFee },
+    });
+    return ApiResponse.success(res, profile);
+  } catch (e) { next(e); }
+});
+
+// Get all students with payment status for a month
+r.get('/payments/monthly', async (req, res, next) => {
+  try {
+    const month = String(req.query.month || new Date().toISOString().slice(0, 7));
+    const students = await prisma.studentProfile.findMany({
+      include: {
+        user: { select: { id: true, fullName: true, phone: true, status: true } },
+        payments: { where: { monthLabel: month } },
+      },
+      orderBy: { user: { fullName: 'asc' } },
+    });
+    const result = students.map(s => ({
+      userId: s.userId,
+      studentProfileId: s.id,
+      fullName: s.user.fullName,
+      phone: s.user.phone,
+      status: s.user.status,
+      monthlyFee: s.monthlyFee ? Number(s.monthlyFee) : null,
+      paid: s.payments.some(p => p.status === 'success'),
+      payment: s.payments.find(p => p.status === 'success') || null,
+    }));
+    return ApiResponse.success(res, result);
+  } catch (e) { next(e); }
+});
+
+// Record a payment for a student
+r.post('/payments/record', async (req, res, next) => {
+  try {
+    const { userId, amount, month, note } = z.object({
+      userId: z.string().uuid(),
+      amount: z.number().min(0),
+      month: z.string().regex(/^\d{4}-\d{2}$/),
+      note: z.string().optional(),
+    }).parse(req.body);
+
+    const profile = await prisma.studentProfile.findUnique({ where: { userId } });
+    if (!profile) return ApiResponse.notFound(res);
+
+    const existing = await prisma.payment.findFirst({
+      where: { studentId: profile.id, monthLabel: month, status: 'success' },
+    });
+    if (existing) return res.status(400).json({ error: { message: 'এই মাসের পেমেন্ট আগেই রেকর্ড হয়েছে।' } });
+
+    const payment = await prisma.payment.create({
+      data: {
+        studentId: profile.id,
+        amountBdt: amount,
+        method: 'manual',
+        status: 'success',
+        monthLabel: month,
+        note,
+        approvedBy: (req as any).user.id,
+        approvedAt: new Date(),
+      },
+    });
+    return ApiResponse.created(res, payment);
+  } catch (e) { next(e); }
+});
+
+// Delete/cancel a payment
+r.delete('/payments/:paymentId', async (req, res, next) => {
+  try {
+    await prisma.payment.delete({ where: { id: req.params.paymentId } });
+    return ApiResponse.success(res, { message: 'পেমেন্ট বাতিল করা হয়েছে।' });
+  } catch (e) { next(e); }
+});
+
 r.get('/reports/attendance', async (req, res, next) => {
   try {
     const { batchId, from, to } = req.query;

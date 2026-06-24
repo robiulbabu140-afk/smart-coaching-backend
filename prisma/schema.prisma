@@ -127,6 +127,7 @@ model StudentProfile {
   classLevel    String?   @map("class_level")
   dateOfBirth   DateTime? @map("date_of_birth")
   address       String?
+  monthlyFee    Decimal?  @map("monthly_fee") @db.Decimal(10,2)
   createdAt     DateTime  @default(now()) @map("created_at")
   updatedAt     DateTime  @updatedAt @map("updated_at")
 
@@ -279,6 +280,8 @@ model Payment {
   manualProofUrl String?       @map("manual_proof_url")
   approvedBy     String?       @map("approved_by")
   approvedAt     DateTime?     @map("approved_at")
+  monthLabel     String?       @map("month_label")
+  note           String?
   createdAt      DateTime      @default(now()) @map("created_at")
   updatedAt      DateTime      @updatedAt @map("updated_at")
 
