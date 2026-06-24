@@ -50,7 +50,7 @@ app.post('/setup', async (_req, res) => {
         status: 'active',
         passwordHash: hash,
         phoneVerified: true,
-        adminProfile: { create: { permissions: [] } },
+        adminProfile: { create: {} },
       },
     });
     return res.json({ message: 'Admin created!', phone: user.phone, password: 'admin1234' });
