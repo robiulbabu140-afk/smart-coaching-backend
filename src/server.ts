@@ -6,12 +6,20 @@ import app from './app';
 
 async function bootstrap() {
   try {
-    await redis.connect();
-    await prisma.$connect();
-    logger.info('Database connected');
+    if (redis) {
+      try { await redis.connect(); } catch { logger.warn('Redis not available, continuing without it'); }
+    }
 
-    app.listen(env.PORT, () => {
-      logger.info(`Server running on http://localhost:${env.PORT}`);
+    if (process.env.DATABASE_URL) {
+      await prisma.$connect();
+      logger.info('Database connected');
+    } else {
+      logger.warn('DATABASE_URL not set — database features disabled');
+    }
+
+    const port = env.PORT || 3000;
+    app.listen(port, '0.0.0.0', () => {
+      logger.info(`Server running on port ${port}`);
       logger.info(`Environment: ${env.NODE_ENV}`);
     });
   } catch (err) {
@@ -22,8 +30,8 @@ async function bootstrap() {
 
 process.on('SIGTERM', async () => {
   logger.info('SIGTERM received, shutting down...');
-  await prisma.$disconnect();
-  await redis.quit();
+  if (process.env.DATABASE_URL) await prisma.$disconnect();
+  if (redis) await redis.quit();
   process.exit(0);
 });
 

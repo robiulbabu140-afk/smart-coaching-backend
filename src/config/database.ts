@@ -1,9 +1,12 @@
 import { PrismaClient } from '@prisma/client';
 import { logger } from '../utils/logger';
 
+if (!process.env.DATABASE_URL) {
+  console.error('⚠️  DATABASE_URL not set — database features will fail');
+}
+
 const prisma = new PrismaClient({
   log: [
-    { level: 'query', emit: 'event' },
     { level: 'error', emit: 'stdout' },
   ],
 });
