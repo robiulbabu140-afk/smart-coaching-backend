@@ -112,8 +112,11 @@ r.post('/students', async (req, res, next) => {
       fullName: z.string().min(2),
       institution: z.string().optional(),
       classLevel: z.string().optional(),
+      address: z.string().optional(),
+      guardianName: z.string().optional(),
+      guardianPhone: z.string().optional(),
     }).parse(req.body);
-    const { fullName, institution, classLevel } = raw;
+    const { fullName, institution, classLevel, address, guardianName, guardianPhone } = raw;
     const phone = normalizePhone(raw.phone);
 
     const user = await prisma.user.upsert({
@@ -124,8 +127,8 @@ r.post('/students', async (req, res, next) => {
 
     const profile = await prisma.studentProfile.upsert({
       where: { userId: user.id },
-      update: { institution, classLevel },
-      create: { userId: user.id, institution, classLevel },
+      update: { institution, classLevel, address, guardianName, guardianPhone },
+      create: { userId: user.id, institution, classLevel, address, guardianName, guardianPhone },
     });
 
     return ApiResponse.created(res, { user, profile });
