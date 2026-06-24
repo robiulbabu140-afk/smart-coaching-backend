@@ -1,0 +1,373 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum UserRole {
+  admin
+  teacher
+  student
+}
+
+enum UserStatus {
+  active
+  suspended
+  pending_approval
+}
+
+enum BatchStatus {
+  active
+  inactive
+  archived
+}
+
+enum ClassStatus {
+  scheduled
+  live
+  ended
+  cancelled
+}
+
+enum AttendanceStatus {
+  invited
+  accepted
+  declined
+  joined
+  missed
+}
+
+enum SubscriptionStatus {
+  active
+  expired
+  cancelled
+  pending_payment
+}
+
+enum PaymentMethod {
+  bkash
+  nagad
+  manual
+}
+
+enum PaymentStatus {
+  pending
+  success
+  failed
+  refunded
+}
+
+enum NotificationType {
+  incoming_class_call
+  subscription_expiry_reminder
+  payment_reminder
+  payment_approved
+  general
+}
+
+model User {
+  id              String      @id @default(uuid())
+  phone           String      @unique
+  phoneVerified   Boolean     @default(false) @map("phone_verified")
+  fullName        String      @map("full_name")
+  profilePhotoUrl String?     @map("profile_photo_url")
+  role            UserRole
+  status          UserStatus  @default(active)
+  passwordHash    String?     @map("password_hash")
+  lastLoginAt     DateTime?   @map("last_login_at")
+  createdAt       DateTime    @default(now()) @map("created_at")
+  updatedAt       DateTime    @updatedAt @map("updated_at")
+  deletedAt       DateTime?   @map("deleted_at")
+
+  teacherProfile  TeacherProfile?
+  studentProfile  StudentProfile?
+  adminProfile    AdminProfile?
+  notifications   Notification[]
+  deviceTokens    DeviceToken[]
+  refreshTokens   RefreshToken[]
+  otpRequests     OtpRequest[]
+  auditLogs       AuditLog[]
+  approvedPayments Payment[]   @relation("PaymentApprover")
+  createdBatches  Batch[]     @relation("BatchCreator")
+
+  @@index([phone])
+  @@index([role])
+  @@index([status])
+  @@map("users")
+}
+
+model TeacherProfile {
+  id               String    @id @default(uuid())
+  userId           String    @unique @map("user_id")
+  subjectExpertise String?   @map("subject_expertise")
+  bio              String?
+  qualification    String?
+  joiningDate      DateTime  @default(now()) @map("joining_date")
+  isActive         Boolean   @default(true) @map("is_active")
+  createdAt        DateTime  @default(now()) @map("created_at")
+  updatedAt        DateTime  @updatedAt @map("updated_at")
+
+  user    User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  batches Batch[]
+  classes Class[]
+
+  @@index([userId])
+  @@map("teacher_profiles")
+}
+
+model StudentProfile {
+  id            String    @id @default(uuid())
+  userId        String    @unique @map("user_id")
+  guardianName  String?   @map("guardian_name")
+  guardianPhone String?   @map("guardian_phone")
+  institution   String?
+  classLevel    String?   @map("class_level")
+  dateOfBirth   DateTime? @map("date_of_birth")
+  address       String?
+  createdAt     DateTime  @default(now()) @map("created_at")
+  updatedAt     DateTime  @updatedAt @map("updated_at")
+
+  user          User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  batchMembers  BatchMember[]
+  subscriptions Subscription[]
+  payments      Payment[]
+  attendance    Attendance[]
+
+  @@index([userId])
+  @@map("student_profiles")
+}
+
+model AdminProfile {
+  id        String   @id @default(uuid())
+  userId    String   @unique @map("user_id")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("admin_profiles")
+}
+
+model Batch {
+  id           String      @id @default(uuid())
+  name         String
+  subject      String?
+  teacherId    String?     @map("teacher_id")
+  scheduleDays String[]    @map("schedule_days")
+  scheduleTime DateTime?   @map("schedule_time")
+  maxStudents  Int         @default(7) @map("max_students")
+  minStudents  Int         @default(5) @map("min_students")
+  status       BatchStatus @default(active)
+  createdBy    String      @map("created_by")
+  createdAt    DateTime    @default(now()) @map("created_at")
+  updatedAt    DateTime    @updatedAt @map("updated_at")
+
+  teacher  TeacherProfile? @relation(fields: [teacherId], references: [id], onDelete: SetNull)
+  creator  User            @relation("BatchCreator", fields: [createdBy], references: [id])
+  members  BatchMember[]
+  classes  Class[]
+
+  @@index([teacherId])
+  @@index([status])
+  @@map("batches")
+}
+
+model BatchMember {
+  id        String    @id @default(uuid())
+  batchId   String    @map("batch_id")
+  studentId String    @map("student_id")
+  joinedAt  DateTime  @default(now()) @map("joined_at")
+  removedAt DateTime? @map("removed_at")
+
+  batch   Batch          @relation(fields: [batchId], references: [id], onDelete: Cascade)
+  student StudentProfile @relation(fields: [studentId], references: [id], onDelete: Cascade)
+
+  @@unique([batchId, studentId])
+  @@index([batchId])
+  @@index([studentId])
+  @@map("batch_members")
+}
+
+model Class {
+  id              String      @id @default(uuid())
+  batchId         String      @map("batch_id")
+  teacherId       String      @map("teacher_id")
+  title           String?
+  livekitRoomName String?     @unique @map("livekit_room_name")
+  scheduledAt     DateTime?   @map("scheduled_at")
+  startedAt       DateTime?   @map("started_at")
+  endedAt         DateTime?   @map("ended_at")
+  status          ClassStatus @default(scheduled)
+  createdAt       DateTime    @default(now()) @map("created_at")
+
+  batch      Batch          @relation(fields: [batchId], references: [id], onDelete: Cascade)
+  teacher    TeacherProfile @relation(fields: [teacherId], references: [id])
+  attendance Attendance[]
+
+  @@index([batchId])
+  @@index([status])
+  @@index([startedAt])
+  @@map("classes")
+}
+
+model Attendance {
+  id              String           @id @default(uuid())
+  classId         String           @map("class_id")
+  studentId       String           @map("student_id")
+  status          AttendanceStatus @default(invited)
+  notifiedAt      DateTime?        @map("notified_at")
+  respondedAt     DateTime?        @map("responded_at")
+  joinedAt        DateTime?        @map("joined_at")
+  leftAt          DateTime?        @map("left_at")
+  durationSeconds Int?             @map("duration_seconds")
+
+  class   Class          @relation(fields: [classId], references: [id], onDelete: Cascade)
+  student StudentProfile @relation(fields: [studentId], references: [id], onDelete: Cascade)
+
+  @@unique([classId, studentId])
+  @@index([classId])
+  @@index([studentId])
+  @@map("attendance")
+}
+
+model SubscriptionPlan {
+  id          String   @id @default(uuid())
+  name        String
+  priceBdt    Decimal  @map("price_bdt")
+  durationDays Int     @default(30) @map("duration_days")
+  description String?
+  isActive    Boolean  @default(true) @map("is_active")
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  subscriptions Subscription[]
+
+  @@map("subscription_plans")
+}
+
+model Subscription {
+  id        String             @id @default(uuid())
+  studentId String             @map("student_id")
+  planId    String             @map("plan_id")
+  status    SubscriptionStatus @default(pending_payment)
+  startsAt  DateTime?          @map("starts_at")
+  expiresAt DateTime?          @map("expires_at")
+  autoRenew Boolean            @default(false) @map("auto_renew")
+  createdAt DateTime           @default(now()) @map("created_at")
+  updatedAt DateTime           @updatedAt @map("updated_at")
+
+  student  StudentProfile   @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  plan     SubscriptionPlan @relation(fields: [planId], references: [id])
+  payments Payment[]
+
+  @@index([studentId])
+  @@index([status])
+  @@index([expiresAt])
+  @@map("subscriptions")
+}
+
+model Payment {
+  id             String        @id @default(uuid())
+  studentId      String        @map("student_id")
+  subscriptionId String?       @map("subscription_id")
+  amountBdt      Decimal       @map("amount_bdt")
+  method         PaymentMethod
+  status         PaymentStatus @default(pending)
+  gatewayTxnId   String?       @map("gateway_txn_id")
+  senderMsisdn   String?       @map("sender_msisdn")
+  manualProofUrl String?       @map("manual_proof_url")
+  approvedBy     String?       @map("approved_by")
+  approvedAt     DateTime?     @map("approved_at")
+  createdAt      DateTime      @default(now()) @map("created_at")
+  updatedAt      DateTime      @updatedAt @map("updated_at")
+
+  student      StudentProfile @relation(fields: [studentId], references: [id])
+  subscription Subscription?  @relation(fields: [subscriptionId], references: [id])
+  approver     User?          @relation("PaymentApprover", fields: [approvedBy], references: [id])
+
+  @@index([studentId])
+  @@index([status])
+  @@index([method])
+  @@map("payments")
+}
+
+model Notification {
+  id        String           @id @default(uuid())
+  userId    String           @map("user_id")
+  type      NotificationType
+  title     String
+  body      String?
+  data      Json?
+  isRead    Boolean          @default(false) @map("is_read")
+  sentAt    DateTime         @default(now()) @map("sent_at")
+  readAt    DateTime?        @map("read_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([isRead])
+  @@map("notifications")
+}
+
+model DeviceToken {
+  id         String   @id @default(uuid())
+  userId     String   @map("user_id")
+  fcmToken   String   @map("fcm_token")
+  deviceInfo String?  @map("device_info")
+  createdAt  DateTime @default(now()) @map("created_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, fcmToken])
+  @@index([userId])
+  @@map("device_tokens")
+}
+
+model OtpRequest {
+  id           String   @id @default(uuid())
+  phone        String
+  otpHash      String   @map("otp_hash")
+  purpose      String   @default("login")
+  attemptCount Int      @default(0) @map("attempt_count")
+  isUsed       Boolean  @default(false) @map("is_used")
+  expiresAt    DateTime @map("expires_at")
+  createdAt    DateTime @default(now()) @map("created_at")
+
+  user User? @relation(fields: [phone], references: [phone])
+
+  @@index([phone])
+  @@map("otp_requests")
+}
+
+model RefreshToken {
+  id         String   @id @default(uuid())
+  userId     String   @map("user_id")
+  tokenHash  String   @map("token_hash")
+  deviceInfo String?  @map("device_info")
+  isRevoked  Boolean  @default(false) @map("is_revoked")
+  expiresAt  DateTime @map("expires_at")
+  createdAt  DateTime @default(now()) @map("created_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("refresh_tokens")
+}
+
+model AuditLog {
+  id          String   @id @default(uuid())
+  actorUserId String?  @map("actor_user_id")
+  action      String
+  targetTable String?  @map("target_table")
+  targetId    String?  @map("target_id")
+  metadata    Json?
+  ipAddress   String?  @map("ip_address")
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  actor User? @relation(fields: [actorUserId], references: [id])
+
+  @@index([actorUserId])
+  @@index([action])
+  @@map("audit_logs")
+}
