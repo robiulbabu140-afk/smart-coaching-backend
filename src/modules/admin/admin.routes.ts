@@ -88,13 +88,6 @@ r.post('/teachers', async (req, res, next) => {
     }).parse(req.body);
     const { fullName, subjectExpertise, bio, qualification } = raw;
     const phone = normalizePhone(raw.phone);
-    const _ = z.string().regex(/^8801[3-9]\d{8}$/, 'ফোন নম্বর সঠিক নয়').parse(phone);
-    void _;
-      fullName: z.string().min(2),
-      subjectExpertise: z.string().optional(),
-      bio: z.string().optional(),
-      qualification: z.string().optional(),
-    }).parse(req.body);
 
     const user = await prisma.user.upsert({
       where: { phone },
