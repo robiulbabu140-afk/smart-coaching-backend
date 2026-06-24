@@ -1,5 +1,6 @@
 import { Router } from 'express';
 import { z } from 'zod';
+import bcrypt from 'bcryptjs';
 import { authenticate } from '../../middleware/authenticate';
 import { requireRole } from '../../middleware/requireRole';
 import { prisma } from '../../config/database';
@@ -89,10 +90,11 @@ r.post('/teachers', async (req, res, next) => {
     const { fullName, subjectExpertise, bio, qualification } = raw;
     const phone = normalizePhone(raw.phone);
 
+    const defaultHash = await bcrypt.hash('1234', 10);
     const user = await prisma.user.upsert({
       where: { phone },
       update: { role: 'teacher', status: 'active' },
-      create: { phone, fullName, role: 'teacher', status: 'active', phoneVerified: false },
+      create: { phone, fullName, role: 'teacher', status: 'active', phoneVerified: false, passwordHash: defaultHash },
     });
 
     const profile = await prisma.teacherProfile.upsert({
@@ -119,10 +121,11 @@ r.post('/students', async (req, res, next) => {
     const { fullName, institution, classLevel, address, guardianName, guardianPhone } = raw;
     const phone = normalizePhone(raw.phone);
 
+    const defaultHash = await bcrypt.hash('1234', 10);
     const user = await prisma.user.upsert({
       where: { phone },
       update: { role: 'student', status: 'active' },
-      create: { phone, fullName, role: 'student', status: 'active', phoneVerified: false },
+      create: { phone, fullName, role: 'student', status: 'active', phoneVerified: false, passwordHash: defaultHash },
     });
 
     const profile = await prisma.studentProfile.upsert({
