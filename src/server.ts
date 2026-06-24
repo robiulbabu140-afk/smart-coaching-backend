@@ -13,6 +13,14 @@ async function bootstrap() {
     if (process.env.DATABASE_URL) {
       await prisma.$connect();
       logger.info('Database connected');
+      // Push schema to database on startup
+      try {
+        const { execSync } = require('child_process');
+        execSync('npx prisma db push --accept-data-loss', { stdio: 'inherit' });
+        logger.info('Database schema synced');
+      } catch (e) {
+        logger.warn('Schema sync warning (may already be up to date)');
+      }
     } else {
       logger.warn('DATABASE_URL not set — database features disabled');
     }
