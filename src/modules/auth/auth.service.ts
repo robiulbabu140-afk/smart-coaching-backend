@@ -41,8 +41,9 @@ export async function loginWithPassword(
   password: string,
   deviceInfo?: string
 ): Promise<{ tokens: TokenPair; user: object }> {
+  const normalizedPhone = phone.startsWith('01') ? '880' + phone : phone;
   const user = await prisma.user.findFirst({
-    where: { phone, deletedAt: null },
+    where: { phone: normalizedPhone, deletedAt: null },
     include: { teacherProfile: true, studentProfile: true, adminProfile: true },
   });
 
