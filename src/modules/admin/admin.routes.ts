@@ -75,10 +75,21 @@ r.patch('/users/:id', async (req, res, next) => {
   } catch (e) { next(e); }
 });
 
+const normalizePhone = (p: string) => p.startsWith('01') ? '880' + p : p;
+
 r.post('/teachers', async (req, res, next) => {
   try {
-    const { phone, fullName, subjectExpertise, bio, qualification } = z.object({
-      phone: z.string().regex(/^8801[3-9]\d{8}$/),
+    const raw = z.object({
+      phone: z.string().min(10),
+      fullName: z.string().min(2),
+      subjectExpertise: z.string().optional(),
+      bio: z.string().optional(),
+      qualification: z.string().optional(),
+    }).parse(req.body);
+    const { fullName, subjectExpertise, bio, qualification } = raw;
+    const phone = normalizePhone(raw.phone);
+    const _ = z.string().regex(/^8801[3-9]\d{8}$/, 'ফোন নম্বর সঠিক নয়').parse(phone);
+    void _;
       fullName: z.string().min(2),
       subjectExpertise: z.string().optional(),
       bio: z.string().optional(),
@@ -103,12 +114,14 @@ r.post('/teachers', async (req, res, next) => {
 
 r.post('/students', async (req, res, next) => {
   try {
-    const { phone, fullName, institution, classLevel } = z.object({
-      phone: z.string().regex(/^8801[3-9]\d{8}$/),
+    const raw = z.object({
+      phone: z.string().min(10),
       fullName: z.string().min(2),
       institution: z.string().optional(),
       classLevel: z.string().optional(),
     }).parse(req.body);
+    const { fullName, institution, classLevel } = raw;
+    const phone = normalizePhone(raw.phone);
 
     const user = await prisma.user.upsert({
       where: { phone },
